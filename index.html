@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English - Indonesian Word Matching Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for playful text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Fredoka', 'Quicksand', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Custom playful gradient background */
+        .bg-game-gradient {
+            background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 40%, #A1C4FD 100%);
+        }
+
+        /* Glassmorphism containers */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 4px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* Card bounce and drag animations */
+        .card-draggable {
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            touch-action: none;
+        }
+
+        .card-draggable:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+
+        .card-selected {
+            ring: 4px;
+            transform: scale(1.03);
+            border-color: #3B82F6 !important;
+            background-color: #EFF6FF !important;
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+        }
+
+        .drop-target-hover {
+            transform: scale(1.04);
+            border-color: #8B5CF6 !important;
+            background-color: #F3E8FF !important;
+        }
+
+        /* Success & Failure Animations */
+        @keyframes popIn {
+            0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+            70% { transform: scale(1.15) rotate(5deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-12px); }
+            40%, 80% { transform: translateX(12px); }
+        }
+
+        .animate-pop-in {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Floating ghost preview during custom touch drag */
+        #drag-ghost {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%) scale(1.08);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="bg-game-gradient min-h-screen flex flex-col justify-between p-3 md:p-6 text-slate-800">
+
+    <!-- TOP BAR / HEADER -->
+    <header class="max-w-6xl w-full mx-auto glass-panel rounded-3xl p-4 shadow-xl mb-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <span class="text-4xl md:text-5xl animate-bounce">🎈</span>
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
+                    Word Match Adventure
+                </h1>
+                <p class="text-xs md:text-sm font-semibold text-slate-600">English - Indonesian Vocabulary</p>
+            </div>
+        </div>
+
+        <!-- Game Controls & Info -->
+        <div class="flex items-center gap-3 md:gap-6 flex-wrap">
+            <!-- Score Counter -->
+            <div class="bg-amber-100 border-2 border-amber-300 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm">
+                <span class="text-2xl">⭐</span>
+                <span class="text-lg font-bold text-amber-800" id="score-text">0 / 10</span>
+            </div>
+
+            <!-- Mute Audio Toggle -->
+            <button id="btn-sound" onclick="toggleSound()" class="bg-purple-100 hover:bg-purple-200 border-2 border-purple-300 text-purple-700 font-bold p-2.5 rounded-2xl transition flex items-center justify-center text-xl shadow-sm" title="Toggle Sound">
+                🔊
+            </button>
+
+            <!-- Reset Button -->
+            <button onclick="resetGame()" class="bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg transition flex items-center gap-2 text-sm md:text-base">
+                🔄 Restart
+            </button>
+        </div>
+    </header>
+
+    <!-- INSTRUCTION BANNER -->
+    <section class="max-w-6xl w-full mx-auto mb-4">
+        <div class="bg-yellow-300 border-4 border-yellow-400 text-yellow-950 font-bold text-center py-3 px-6 rounded-2xl shadow-md text-base md:text-xl tracking-wide flex items-center justify-center gap-2">
+            <span>💡</span>
+            <span>Match the words with its meaning in Indonesian.</span>
+        </div>
+        <p class="text-center text-xs md:text-sm font-bold text-slate-700 mt-2">
+            💡 <span class="bg-white/80 px-2 py-0.5 rounded-lg shadow-sm">Tip for Interactive Board:</span> Drag and drop OR tap an English word on the left, then tap its Indonesian pair on the right!
+        </p>
+    </section>
+
+    <!-- MAIN GAME ARENA (TWO COLUMNS) -->
+    <main class="max-w-6xl w-full mx-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start mb-6">
+        
+        <!-- LEFT COLUMN: ENGLISH WORDS -->
+        <div class="glass-panel rounded-3xl p-4 md:p-6 shadow-xl">
+            <h2 class="text-xl md:text-2xl font-bold text-blue-700 mb-4 pb-2 border-b-4 border-blue-200 flex items-center gap-2">
+                <span>🇬🇧</span> English Words
+            </h2>
+            <div id="english-column" class="flex flex-col gap-3">
+                <!-- English cards inserted dynamically -->
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: INDONESIAN MEANINGS -->
+        <div class="glass-panel rounded-3xl p-4 md:p-6 shadow-xl">
+            <h2 class="text-xl md:text-2xl font-bold text-emerald-700 mb-4 pb-2 border-b-4 border-emerald-200 flex items-center gap-2">
+                <span>🇮🇩</span> Indonesian Meanings
+            </h2>
+            <div id="indonesian-column" class="flex flex-col gap-3">
+                <!-- Indonesian cards inserted dynamically -->
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="max-w-6xl w-full mx-auto text-center py-2 text-slate-600 font-bold text-xs md:text-sm">
+        Interactive Learning Game for Digital Whiteboards & Tablets
+    </footer>
+
+    <!-- IMMEDIATE FEEDBACK OVERLAY (BIG CHECK / CROSS) -->
+    <div id="feedback-overlay" class="fixed inset-0 pointer-events-none flex items-center justify-center z-50 hidden">
+        <div id="feedback-card" class="glass-panel rounded-3xl p-8 shadow-2xl flex flex-col items-center justify-center transform transition-all duration-300 min-w-[220px] min-h-[220px]">
+            <div id="feedback-icon" class="text-8xl md:text-9xl mb-2 filter drop-shadow-lg"></div>
+            <div id="feedback-message" class="text-2xl md:text-3xl font-extrabold text-slate-800 text-center"></div>
+        </div>
+    </div>
+
+    <!-- RECAP / SUMMARY MODAL -->
+    <div id="recap-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl border-4 border-purple-300 max-h-[90vh] flex flex-col animate-pop-in">
+            <!-- Modal Header -->
+            <div class="text-center mb-4">
+                <div class="text-6xl mb-2 animate-bounce">🏆</div>
+                <h2 class="text-3xl md:text-4xl font-extrabold text-purple-700">Great Job!</h2>
+                <p class="text-slate-600 font-bold text-base mt-1">Game Completed Summary</p>
+                
+                <!-- Stars Rating -->
+                <div id="stars-container" class="flex justify-center gap-2 text-4xl mt-3">
+                    <!-- Stars inserted by JS -->
+                </div>
+            </div>
+
+            <!-- Score Stats Banner -->
+            <div class="grid grid-cols-2 gap-4 mb-4 bg-purple-50 p-4 rounded-2xl border-2 border-purple-200 text-center">
+                <div>
+                    <p class="text-xs font-bold text-purple-600 uppercase tracking-wide">Final Accuracy</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-purple-900" id="recap-score-pct">100%</p>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-purple-600 uppercase tracking-wide">Time Taken</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-purple-900" id="recap-time">00:00</p>
+                </div>
+            </div>
+
+            <!-- Words Pair Breakdown List -->
+            <div class="flex-1 overflow-y-auto mb-6 pr-2">
+                <h3 class="font-bold text-slate-700 mb-2 text-sm uppercase tracking-wider">Pairing Summary:</h3>
+                <div id="recap-list" class="space-y-2">
+                    <!-- Dynamic summary rows inserted by JS -->
+                </div>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="flex gap-4">
+                <button onclick="resetGame()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 text-white font-extrabold py-4 px-6 rounded-2xl shadow-lg transition text-lg flex items-center justify-center gap-2">
+                    <span>🎮</span> Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GHOST ELEMENT FOR TOUCH DRAGGING -->
+    <div id="drag-ghost" class="hidden glass-panel px-6 py-4 rounded-2xl font-bold text-blue-800 text-xl border-4 border-blue-400 bg-white"></div>
+
+    <script>
+        /* ==========================================
+           GAME DATA DEFINITIONS & INITIALIZATION
+           ========================================== */
+        const wordPairs = [
+            { id: 1,  en: "wolf",    id_meaning: "serigala" },
+            { id: 2,  en: "village", id_meaning: "desa" },
+            { id: 3,  en: "sheep",   id_meaning: "domba" },
+            { id: 4,  en: "quiet",   id_meaning: "tenang" },
+            { id: 5,  en: "near",    id_meaning: "dekat" },
+            { id: 6,  en: "hill",    id_meaning: "bukit" },
+            { id: 7,  en: "angry",   id_meaning: "marah" },
+            { id: 8,  en: "shout",   id_meaning: "berteriak" },
+            { id: 9,  en: "laugh",   id_meaning: "tertawa" },
+            { id: 10, en: "lie",     id_meaning: "berbohong" }
+        ];
+
+        // State tracking
+        let englishList = [];
+        let indonesianList = [];
+        let matchedPairs = new Map(); // enId -> indId
+        let totalAttempts = 0;
+        let correctCount = 0;
+        let selectedEnglishCard = null; // For tap-to-match mode
+        let soundEnabled = true;
+        let gameStartTime = null;
+        let timerInterval = null;
+
+        // Web Audio Synthesizer for Touch/Classroom sound feedback
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'correct') {
+                    // Cheerful rising chord (C5 -> E5 -> G5)
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                    osc.start(now);
+                    osc.stop(now + 0.45);
+                } else if (type === 'wrong') {
+                    // Low error buzz
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(160, now);
+                    osc.frequency.linearRampToValueAtTime(110, now + 0.25);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'select') {
+                    // Soft tap click
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'fanfare') {
+                    // Victory melody
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const noteOsc = audioCtx.createOscillator();
+                        const noteGain = audioCtx.createGain();
+                        noteOsc.type = 'triangle';
+                        noteOsc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                        noteGain.gain.setValueAtTime(0.25, now + idx * 0.12);
+                        noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.3);
+                        noteOsc.connect(noteGain);
+                        noteGain.connect(audioCtx.destination);
+                        noteOsc.start(now + idx * 0.12);
+                        noteOsc.stop(now + idx * 0.12 + 0.3);
+                    });
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('btn-sound').innerText = soundEnabled ? '🔊' : '🔇';
+        }
+
+        /* ==========================================
+           UTILITY FUNCTIONS
+           ========================================== */
+        // Fisher-Yates Shuffle Algorithm
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            const newArray = [...array];
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [newArray[currentIndex], newArray[randomIndex]] = [
+                    newArray[randomIndex], newArray[currentIndex]
+                ];
+            }
+            return newArray;
+        }
+
+        /* ==========================================
+           GAME START & RESET
+           ========================================== */
+        function resetGame() {
+            matchedPairs.clear();
+            totalAttempts = 0;
+            correctCount = 0;
+            selectedEnglishCard = null;
+            gameStartTime = Date.now();
+
+            document.getElementById('recap-modal').classList.add('hidden');
+            document.getElementById('score-text').innerText = `0 / ${wordPairs.length}`;
+
+            // Left side keeps standard list order, Right side is randomly shuffled
+            englishList = [...wordPairs];
+            indonesianList = shuffle([...wordPairs]);
+
+            renderCards();
+        }
+
+        /* ==========================================
+           RENDER DOM CARDS
+           ========================================== */
+        function renderCards() {
+            const englishContainer = document.getElementById('english-column');
+            const indonesianContainer = document.getElementById('indonesian-column');
+
+            englishContainer.innerHTML = '';
+            indonesianContainer.innerHTML = '';
+
+            // Render English Draggable / Tap Cards
+            englishList.forEach((item, index) => {
+                const isMatched = matchedPairs.has(item.id);
+                const card = document.createElement('div');
+                card.id = `en-card-${item.id}`;
+                card.dataset.id = item.id;
+                card.dataset.type = 'english';
+                
+                if (isMatched) {
+                    card.className = "bg-slate-100 border-2 border-slate-300 text-slate-400 p-4 rounded-2xl font-bold text-lg md:text-xl flex items-center justify-between opacity-60 shadow-inner cursor-not-allowed";
+                    card.innerHTML = `
+                        <span class="flex items-center gap-3">
+                            <span class="bg-slate-200 text-slate-500 w-8 h-8 rounded-full text-sm flex items-center justify-center font-extrabold">${index + 1}</span>
+                            <span>${item.en}</span>
+                        </span>
+                        <span class="text-emerald-500 font-extrabold text-2xl">✓</span>
+                    `;
+                } else {
+                    card.className = "card-draggable bg-white border-4 border-blue-300 hover:border-blue-400 text-blue-900 p-4 rounded-2xl font-bold text-lg md:text-xl flex items-center justify-between shadow-md hover:shadow-lg transform transition";
+                    card.setAttribute('draggable', 'true');
+                    card.innerHTML = `
+                        <span class="flex items-center gap-3">
+                            <span class="bg-blue-100 text-blue-700 w-8 h-8 rounded-full text-sm flex items-center justify-center font-extrabold">${index + 1}</span>
+                            <span class="capitalize">${item.en}</span>
+                        </span>
+                        <span class="text-blue-300 text-sm">🖐 Drag / Tap</span>
+                    `;
+
+                    // Drag Events (Mouse + Standard HTML5 Drag)
+                    card.addEventListener('dragstart', handleDragStart);
+                    card.addEventListener('dragend', handleDragEnd);
+
+                    // Touch Events for Interactive Boards / Mobile
+                    card.addEventListener('touchstart', handleTouchStart, { passive: false });
+                    card.addEventListener('touchmove', handleTouchMove, { passive: false });
+                    card.addEventListener('touchend', handleTouchEnd);
+
+                    // Click / Tap Event for Tap-To-Match mode
+                    card.addEventListener('click', () => handleEnglishCardClick(card, item.id));
+                }
+
+                englishContainer.appendChild(card);
+            });
+
+            // Render Indonesian Target Cards
+            indonesianList.forEach((item, index) => {
+                const matchedEnId = Array.from(matchedPairs.entries()).find(([enId, indId]) => indId === item.id)?.[0];
+                const isMatched = !!matchedEnId;
+
+                const target = document.createElement('div');
+                target.id = `ind-card-${item.id}`;
+                target.dataset.id = item.id;
+                target.dataset.type = 'indonesian';
+
+                if (isMatched) {
+                    const matchedItem = wordPairs.find(w => w.id === matchedEnId);
+                    target.className = "bg-emerald-50 border-4 border-emerald-400 text-emerald-900 p-4 rounded-2xl font-bold text-lg md:text-xl flex items-center justify-between shadow-sm";
+                    target.innerHTML = `
+                        <span class="flex items-center gap-3">
+                            <span class="bg-emerald-200 text-emerald-800 w-8 h-8 rounded-full text-sm flex items-center justify-center font-extrabold">${String.fromCharCode(65 + index)}</span>
+                            <span class="capitalize">${item.id_meaning}</span>
+                        </span>
+                        <span class="bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                            ✓ ${matchedItem.en}
+                        </span>
+                    `;
+                } else {
+                    target.className = "drop-target bg-white border-4 border-emerald-200 hover:border-emerald-400 text-emerald-950 p-4 rounded-2xl font-bold text-lg md:text-xl flex items-center justify-between shadow-md transition cursor-pointer";
+                    target.innerHTML = `
+                        <span class="flex items-center gap-3">
+                            <span class="bg-emerald-100 text-emerald-700 w-8 h-8 rounded-full text-sm flex items-center justify-center font-extrabold">${String.fromCharCode(65 + index)}</span>
+                            <span class="capitalize">${item.id_meaning}</span>
+                        </span>
+                        <span class="text-emerald-300 text-sm">🎯 Target</span>
+                    `;
+
+                    // HTML5 Dragover / Drop Events
+                    target.addEventListener('dragover', handleDragOver);
+                    target.addEventListener('dragleave', handleDragLeave);
+                    target.addEventListener('drop', handleDrop);
+
+                    // Click / Tap Event for Tap-To-Match
+                    target.addEventListener('click', () => handleIndonesianCardClick(item.id));
+                }
+
+                indonesianContainer.appendChild(target);
+            });
+        }
+
+        /* ==========================================
+           INTERACTION & MATCHING LOGIC
+           ========================================== */
+        function checkMatch(englishId, indonesianId) {
+            initAudio();
+            totalAttempts++;
+
+            const isCorrect = (englishId === indonesianId);
+
+            if (isCorrect) {
+                matchedPairs.set(englishId, indonesianId);
+                correctCount++;
+                document.getElementById('score-text').innerText = `${correctCount} / ${wordPairs.length}`;
+
+                playSound('correct');
+                showFeedback(true, "CORRECT!", "✓");
+
+                // Check if Game Completed
+                if (correctCount === wordPairs.length) {
+                    setTimeout(() => {
+                        triggerVictory();
+                    }, 1200);
+                }
+            } else {
+                playSound('wrong');
+                showFeedback(false, "TRY AGAIN!", "✕");
+
+                // Shake animation on wrong English card
+                const enCard = document.getElementById(`en-card-${englishId}`);
+                if (enCard) {
+                    enCard.classList.add('animate-shake');
+                    setTimeout(() => enCard.classList.remove('animate-shake'), 500);
+                }
+            }
+
+            // Deselect selected card in tap mode
+            if (selectedEnglishCard) {
+                selectedEnglishCard.classList.remove('card-selected');
+                selectedEnglishCard = null;
+            }
+
+            renderCards();
+        }
+
+        /* ==========================================
+           TAP-TO-MATCH SELECTION HANDLERS
+           ========================================== */
+        function handleEnglishCardClick(cardElement, id) {
+            initAudio();
+            playSound('select');
+
+            if (selectedEnglishCard) {
+                selectedEnglishCard.classList.remove('card-selected');
+            }
+
+            if (selectedEnglishCard === cardElement) {
+                selectedEnglishCard = null; // Toggle off
+            } else {
+                selectedEnglishCard = cardElement;
+                selectedEnglishCard.classList.add('card-selected');
+            }
+        }
+
+        function handleIndonesianCardClick(indonesianId) {
+            if (!selectedEnglishCard) return;
+
+            const englishId = parseInt(selectedEnglishCard.dataset.id);
+            checkMatch(englishId, indonesianId);
+        }
+
+        /* ==========================================
+           HTML5 MOUSE DRAG & DROP HANDLERS
+           ========================================== */
+        let draggedEnId = null;
+
+        function handleDragStart(e) {
+            initAudio();
+            draggedEnId = parseInt(this.dataset.id);
+            e.dataTransfer.setData('text/plain', draggedEnId);
+            this.classList.add('opacity-40');
+            playSound('select');
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('opacity-40');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            this.classList.add('drop-target-hover');
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drop-target-hover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            this.classList.remove('drop-target-hover');
+            const targetIndId = parseInt(this.dataset.id);
+            if (draggedEnId !== null) {
+                checkMatch(draggedEnId, targetIndId);
+                draggedEnId = null;
+            }
+        }
+
+        /* ==========================================
+           TOUCH DRAG & DROP FOR DIGITAL WHITEBOARDS
+           ========================================== */
+        let touchDraggedEnId = null;
+        let touchGhostEl = null;
+
+        function handleTouchStart(e) {
+            initAudio();
+            const touch = e.touches[0];
+            touchDraggedEnId = parseInt(this.dataset.id);
+
+            // Setup ghost element
+            touchGhostEl = document.getElementById('drag-ghost');
+            const enItem = wordPairs.find(w => w.id === touchDraggedEnId);
+            touchGhostEl.innerText = enItem ? enItem.en.toUpperCase() : '';
+            touchGhostEl.style.left = `${touch.clientX}px`;
+            touchGhostEl.style.top = `${touch.clientY}px`;
+            touchGhostEl.classList.remove('hidden');
+
+            playSound('select');
+        }
+
+        function handleTouchMove(e) {
+            if (!touchDraggedEnId || !touchGhostEl) return;
+            e.preventDefault(); // Stop scrolling while dragging
+            const touch = e.touches[0];
+            touchGhostEl.style.left = `${touch.clientX}px`;
+            touchGhostEl.style.top = `${touch.clientY}px`;
+
+            // Highlight drop target under finger
+            const targetUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target-hover'));
+            if (targetUnderFinger) {
+                const targetCard = targetUnderFinger.closest('.drop-target');
+                if (targetCard) {
+                    targetCard.classList.add('drop-target-hover');
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchDraggedEnId || !touchGhostEl) return;
+
+            const touch = e.changedTouches[0];
+            touchGhostEl.classList.add('hidden');
+
+            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target-hover'));
+
+            const targetUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (targetUnderFinger) {
+                const targetCard = targetUnderFinger.closest('.drop-target');
+                if (targetCard) {
+                    const targetIndId = parseInt(targetCard.dataset.id);
+                    checkMatch(touchDraggedEnId, targetIndId);
+                }
+            }
+
+            touchDraggedEnId = null;
+        }
+
+        /* ==========================================
+           VISUAL FEEDBACK OVERLAY (BIG GREEN / RED)
+           ========================================== */
+        function showFeedback(isCorrect, text, symbol) {
+            const overlay = document.getElementById('feedback-overlay');
+            const card = document.getElementById('feedback-card');
+            const icon = document.getElementById('feedback-icon');
+            const msg = document.getElementById('feedback-message');
+
+            icon.innerText = symbol;
+            msg.innerText = text;
+
+            if (isCorrect) {
+                card.className = "glass-panel rounded-3xl p-8 shadow-2xl flex flex-col items-center justify-center min-w-[240px] min-h-[240px] border-8 border-emerald-400 bg-emerald-500/90 text-white animate-pop-in";
+                icon.className = "text-8xl md:text-9xl mb-2 text-white drop-shadow-md";
+                msg.className = "text-3xl md:text-4xl font-extrabold text-white tracking-wider";
+            } else {
+                card.className = "glass-panel rounded-3xl p-8 shadow-2xl flex flex-col items-center justify-center min-w-[240px] min-h-[240px] border-8 border-rose-500 bg-rose-500/90 text-white animate-pop-in";
+                icon.className = "text-8xl md:text-9xl mb-2 text-white drop-shadow-md";
+                msg.className = "text-3xl md:text-4xl font-extrabold text-white tracking-wider";
+            }
+
+            overlay.classList.remove('hidden');
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+            }, 800);
+        }
+
+        /* ==========================================
+           SUMMARY & RECAP MODAL AT GAME END
+           ========================================== */
+        function triggerVictory() {
+            playSound('fanfare');
+
+            // Trigger confetti blast
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            const elapsedSeconds = Math.round((Date.now() - gameStartTime) / 1000);
+            const mins = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+            const secs = (elapsedSeconds % 60).toString().padStart(2, '0');
+
+            const accuracyPct = Math.round((wordPairs.length / Math.max(totalAttempts, 1)) * 100);
+
+            // Display stats in Modal
+            document.getElementById('recap-score-pct').innerText = `${accuracyPct}%`;
+            document.getElementById('recap-time').innerText = `${mins}:${secs}`;
+
+            // Stars calculation
+            const starsContainer = document.getElementById('stars-container');
+            let starsCount = 3;
+            if (accuracyPct < 70) starsCount = 1;
+            else if (accuracyPct < 90) starsCount = 2;
+
+            starsContainer.innerHTML = Array(3).fill(0).map((_, i) => 
+                `<span class="${i < starsCount ? 'text-amber-400 scale-110' : 'text-slate-300'} transition transform">⭐</span>`
+            ).join('');
+
+            // Build Recap Table
+            const recapList = document.getElementById('recap-list');
+            recapList.innerHTML = wordPairs.map((item, idx) => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">${idx + 1}</span>
+                        <span class="font-extrabold text-blue-900 capitalize">${item.en}</span>
+                    </div>
+                    <span class="text-slate-400 font-bold">➔</span>
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-emerald-800 capitalize">${item.id_meaning}</span>
+                        <span class="text-emerald-500 font-bold">✓</span>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('recap-modal').classList.remove('hidden');
+        }
+
+        /* ==========================================
+           ON PAGE LOAD INITIALIZATION
+           ========================================== */
+        window.addEventListener('DOMContentLoaded', () => {
+            resetGame();
+        });
+    </script>
+</body>
+</html>
